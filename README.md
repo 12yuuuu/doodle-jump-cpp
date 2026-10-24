@@ -9,14 +9,12 @@
   <img alt="No game engine" src="https://img.shields.io/badge/game%20engine-none-E08A3C">
 </p>
 
-A remake of the mobile game *Doodle Jump*, built from scratch in **C++17 on Qt 5's Graphics View framework** as the term project for *Introduction to Computer Science* (Prof. Yean-Ru Chen) at National Cheng Kung University (NCKU), spring 2023.
+A remake of the mobile game *Doodle Jump*, built from scratch in **C++17 on Qt 5's Graphics View framework** as a solo project for *Introduction to Computer Science* (Prof. Yean-Ru Chen) at National Cheng Kung University (NCKU), spring 2023.
 
 There is no game engine underneath. The update loop, jump physics, camera, collision handling, procedural level generator, sprite animation and sound are all hand-written, in about 1,300 lines of C++ across 8 classes, plus a headless test for the level generator.
 
 <p align="center">
   <img src="docs/demo.gif" alt="Gameplay demo: the doodle climbs, bounces on springs and a trampoline, shoots a monster and flies a jetpack" width="300">
-  <br>
-  <sub>Real gameplay, recorded headless with a scripted player.</sub>
 </p>
 
 ## Highlights
@@ -51,70 +49,9 @@ There is no game engine underneath. The update loop, jump physics, camera, colli
 
 `Game` is the `QGraphicsView`. It owns the scene, switches between the start, play and game-over screens, scrolls the world and runs the level generator. Every sprite type is its own class that inherits from both `QObject` (for signals, slots and timers) and `QGraphicsPixmapItem` (for drawing and collision shapes).
 
-```mermaid
-classDiagram
-    direction TB
-    class Game {
-        <<QGraphicsView>>
-        platform : vector~Platform*~
-        item : vector~Item*~
-        monster : vector~Monster*~
-        climbed : double
-        startplay()
-        createPlatform()
-        pickPlatformType(height)
-        movePlatforms(dy)
-        requestGameOver()
-    }
-    class Player {
-        <<QObject + QGraphicsPixmapItem>>
-        vel, yCounter, middle
-        move() every 8 ms
-        handleCollisions()
-        startBoost(item)
-        Camera()
-    }
-    class Platform {
-        <<QObject + QGraphicsPixmapItem>>
-        type : normal / broken / moving / disappearing
-        collide(Player*) bool
-        down()
-        fade()
-    }
-    class Item {
-        <<QObject + QGraphicsPixmapItem>>
-        type : spring / trampoline / hat / jetpack
-        collide(Player*)
-    }
-    class Monster {
-        <<QObject + QGraphicsPixmapItem>>
-        collide(Player*)
-        hit(Game*)
-    }
-    class Bullet {
-        <<QObject + QGraphicsPixmapItem>>
-        dx, dy : unit vector x speed
-        move()
-    }
-    class Score {
-        <<QGraphicsTextItem>>
-    }
-    class Button {
-        <<QObject + QGraphicsPixmapItem>>
-        clicked() signal
-    }
-    Game *-- Player
-    Game *-- "many" Platform
-    Game *-- "many" Item
-    Game *-- "many" Monster
-    Game *-- Score
-    Game *-- Button
-    Player ..> Bullet : fires
-    Bullet ..> Monster : kills
-    Player ..> Platform : lands on
-    Player ..> Item : picks up
-    Player ..> Monster : stomps / is hurt by
-```
+<p align="center">
+  <img src="docs/architecture.svg" alt="Architecture: Game owns one QGraphicsScene with Player, Bullet, Platform, Item, Monster, Score and Button" width="100%">
+</p>
 
 ### Jump and camera
 
@@ -163,7 +100,7 @@ qmake ../Project_1.pro   # generates a Makefile for your machine
 make
 ```
 
-**Assets.** The sprites and sounds come from the course TAs (based on the original game by Lima Sky), so they are not redistributed here. The game loads them from `./dataset/` relative to the working directory, so put that folder next to where you launch the binary:
+**Assets.** The sprites and sounds were provided with the assignment (based on the original game by Lima Sky), so they are not redistributed here. The game loads them from `./dataset/` relative to the working directory, so put that folder next to where you launch the binary:
 
 ```text
 build/
@@ -188,10 +125,10 @@ dataset/images/
   item-trampoline1.png ... item-trampoline3.png
   item-propeller-hat.png  item-jetpack.png
   monster1.png ... monster4.png
-  welcome.png  play_button.png  end.png  toolbar.png  hp.png   # made for this project, not in the TA set
+  welcome.png  play_button.png  end.png  toolbar.png  hp.png   # made for this project, not in the provided set
 dataset/sounds/
   jump.wav  break.wav
-  shoot.wav  jumponmonster.wav                  # converted from the TA's .mp3 files
+  shoot.wav  jumponmonster.wav                  # converted from the provided .mp3 files
 ```
 
 </details>
@@ -239,19 +176,6 @@ QT_QPA_PLATFORM=offscreen ./spawn_rules_test
 - **Game systems:** collision resolution, camera and scrolling, constrained procedural generation, sprite animation, audio.
 - **Spec to code:** the course spec's screen and sprite sizes, jump distances, unlock scores and spawn guarantees are encoded as constants and tick counts, and the guarantees are tested.
 
-## Revisited in 2026
-
-Fixes on top of the original 2023 submission:
-
-- **Score never updated.** The tick timer was connected to `highest(bool)`, whose signature doesn't match `timeout()`, so Qt rejected the connection at runtime. The score now tracks the highest point reached.
-- **Spawn rules.** The item cap never reset (only two items ever appeared), special platforms used a cooldown instead of the spec's "at least once per interval", and moving platforms stopped after 9000. All replaced by the generator described above, with a test.
-- **Platforms.** Broken platforms used to bounce the player and disappearing ones never disappeared.
-- **Game over.** Losing all three hearts didn't end the run; a game over deleted the player from inside its own update.
-- **Power-ups and monsters.** A hat or jetpack picked up while falling didn't lift the doodle, and monsters could hurt a flying doodle.
-- **Input.** Aiming used a hard-coded screen offset, and every key press, auto-repeats included, started another movement timer, so holding an arrow key could make the doodle speed up.
-- **Memory.** Every platform owned an unparented `QMediaPlayer`, and nothing that scrolled off screen was freed.
-- **Portability.** `#include` lines whose case didn't match the file names broke builds on case-sensitive file systems.
-
 ## Known limitations
 
 - Motion is tied to timer ticks rather than elapsed time, so the game slows down if the event loop is starved.
@@ -262,4 +186,3 @@ Fixes on top of the original 2023 submission:
 ## Credits
 
 - *Doodle Jump* and its original art belong to Lima Sky. This is a non-commercial, educational remake.
-- Project specification and assets: NCKU course teaching assistants.
