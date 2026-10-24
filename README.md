@@ -9,7 +9,7 @@
   <img alt="No game engine" src="https://img.shields.io/badge/game%20engine-none-E08A3C">
 </p>
 
-A remake of the mobile game *Doodle Jump*, built from scratch in **C++17 on Qt 5's Graphics View framework** as a solo project for *Introduction to Computer Science* (Prof. Yean-Ru Chen) at National Cheng Kung University (NCKU), spring 2023.
+A remake of the mobile game *Doodle Jump*, built from scratch in **C++17 on Qt 5's Graphics View framework** as a course project for *Introduction to Computer Science* (計算機概論), taught by Prof. Yean-Ru Chen (陳瑩如) at National Cheng Kung University (NCKU), spring 2023.
 
 There is no game engine underneath. The update loop, jump physics, camera, collision handling, procedural level generator, sprite animation and sound are all hand-written, in about 1,300 lines of C++ across 8 classes, plus a headless test for the level generator.
 
@@ -182,6 +182,11 @@ QT_QPA_PLATFORM=offscreen ./spawn_rules_test
 - Jumps are constant-speed, as the spec asks; a gravity-based jump was an optional bonus that isn't implemented.
 - Each sound effect has a single `QMediaPlayer`, so rapid repeats of the same effect cut each other off.
 - Qt 5 only; Qt 6 replaced the `QMediaPlayer` API used here.
+
+## Authors
+
+- Ana Liu ([@12yuuuu](https://github.com/12yuuuu))
+- Donna Hsu
 
 ## Credits
 
