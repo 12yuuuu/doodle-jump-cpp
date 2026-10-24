@@ -6,7 +6,7 @@
 #include <QObject>
 #include "game.h"
 #include <QMouseEvent>
-#include <player.h>
+#include "player.h"
 
 class Player;
 extern Game * game;
@@ -21,4 +21,4 @@ public slots:
     void move();
 };
 
-#endif // BULLET_H
+#endif // BULLET_H

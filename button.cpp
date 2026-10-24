@@ -1,4 +1,4 @@
-#include "Button.h"
+#include "button.h"
 Button::Button(QGraphicsItem *)
 {
     QPixmap playerPixmap("./dataset/images/play_button.png");

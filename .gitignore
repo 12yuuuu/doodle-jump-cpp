@@ -1,0 +1,8 @@
+build/
+build-*/
+dataset/
+Makefile
+*.o
+moc_*
+*.user
+.qmake.stash

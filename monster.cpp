@@ -23,7 +23,7 @@ Monster::Monster(int t)
     }
     setZValue(3);
 
-    jumponmonster = new QMediaPlayer;
+    jumponmonster = new QMediaPlayer(this);
     jumponmonster->setMedia(QUrl::fromLocalFile("./dataset/sounds/jumponmonster.wav"));
         // 設定音量
     jumponmonster->setVolume(50);
@@ -31,33 +31,38 @@ Monster::Monster(int t)
 
 void Monster::collide(Player * player)
 {
-    if (player->getVel() < 0) 
+    // a flying doodle (propeller hat / jetpack) can't be hurt
+    if (dead || player->isFlying())
+        return;
+
+    // coming down onto the top part of the monster: stomp it
+    if (player->getVel() < 0 && player->feet() <= pos().y() + pixmap().height() * 0.4)
     {
-        if(player->pos().y() + player->pixmap().height() >= pos().y() - pixmap().height())
-        {
-            jumponmonster->play();
-            QTimer* timer = new QTimer(this);
-            connect(timer, SIGNAL(timeout()), this, SLOT(move()));
-            timer->start(50);
-            player->setVel();
-        }
-    } 
-    else 
-    {
-        if (!hasCollidedWithPlayer)
-            game->decreaseHp();
+        dead = true;
+        jumponmonster->play();
+        QTimer* timer = new QTimer(this);
+        connect(timer, SIGNAL(timeout()), this, SLOT(move()));
+        timer->start(50);
+        player->setVel();
+        player->yCounter = 0;
     }
-    hasCollidedWithPlayer = true;
+    // touching its sides or bottom: lose one heart, once per monster
+    else if (!hasCollidedWithPlayer)
+    {
+        hasCollidedWithPlayer = true;
+        game->decreaseHp();
+    }
 }
 
 void Monster::hit(Game * game)
 {
-    game->scene->removeItem(this);
+    if (dead)
+        return;
+    dead = true;
+    game->discardMonster(this);
 }
 
 void Monster::move()
 {
     setY(pos().y() + 10);
 }
-
-

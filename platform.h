@@ -23,16 +23,17 @@ class Platform: public QObject, public QGraphicsPixmapItem
     Q_OBJECT
 
 public:
-    Platform(int);     
-    void collide(Player *, int);
-    Game * game;
-    Player * player;
+    Platform(int);
+    bool collide(Player *);   // true if the player landed and bounced
     int getType();
     int type;
     int v = 5;
+    bool used = false;        // broken: already cracked, disappearing: already bounced on
+    int frame = 1;
     QMediaPlayer  *platformbreak;
 public slots:
     void move();
     void down();
+    void fade();
 };
 #endif

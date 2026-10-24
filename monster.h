@@ -8,7 +8,7 @@
 #include <QTimer>
 #include <QGraphicsScene>
 #include <QList>
-#include <stdlib.h> 
+#include <stdlib.h>
 #include "game.h"
 #include <QMediaPlayer>
 
@@ -25,6 +25,7 @@ public:
     void collide(Player *);
     void hit(Game*);
     bool hasCollidedWithPlayer = false;
+    bool dead = false;
     QMediaPlayer  *jumponmonster;
 public slots:
     void move();

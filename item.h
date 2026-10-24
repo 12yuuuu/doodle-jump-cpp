@@ -16,11 +16,13 @@ class Item: public QObject,public QGraphicsPixmapItem
 
 public:
     Item(int);
-    QTimer * timer;
-    Game * game;
-    void collide(Player*, int);
+    void collide(Player*);
     int type;
-    int getType(); 
+    int getType();
+    bool used = false;
+    int frame = 1;
+public slots:
+    void bounce();
 };
 
 #endif

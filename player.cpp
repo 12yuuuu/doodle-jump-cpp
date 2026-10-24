@@ -1,4 +1,4 @@
-#include "Player.h"
+#include "player.h"
 
 extern Game * game;
 
@@ -6,246 +6,217 @@ Player::Player(QGraphicsItem *parent): QGraphicsPixmapItem(parent)
 {
     vel = 5;
     // set graphic
-    QPixmap playerPixmap("./dataset/images/doodleL.png");
-    setPixmap(playerPixmap);
+    setSprite("./dataset/images/doodleL.png");
+
+    // the 8 ms tick that drives the player: physics, camera and score
     QTimer* timer = new QTimer(this);
     connect(timer, SIGNAL(timeout()), this, SLOT(move()));
     connect(timer, &QTimer::timeout, this, &Player::Camera);
-    connect(timer, SIGNAL(timeout()), this, SLOT(highest(bool)));
+    connect(timer, SIGNAL(timeout()), this, SLOT(highest()));
     timer->start(8);
-    shoot = new QMediaPlayer;
+
+    // horizontal movement, started and stopped by the arrow keys
+    timerx = new QTimer(this);
+    connect(timerx, SIGNAL(timeout()), this, SLOT(moveX()));
+
+    shoot = new QMediaPlayer(this);
     shoot->setMedia(QUrl::fromLocalFile("./dataset/sounds/shoot.wav"));
         // 設定音量
     shoot->setVolume(50);
 
-    jump = new QMediaPlayer;
+    jump = new QMediaPlayer(this);
     jump->setMedia(QUrl::fromLocalFile("./dataset/sounds/jump.wav"));
         // 設定音量
     jump->setVolume(50);
 }
 
+// Keeps the 80 x 80 body in place when the sprite size changes: taller sprites
+// (shooting pose, propeller hat) grow upwards; jetpack frames anchor at the top-left.
+void Player::setSprite(const QString &path, bool alignBottom)
+{
+    QPixmap pix(path);
+    setPixmap(pix);
+    if (alignBottom)
+        setOffset((80 - pix.width()) / 2.0, 80 - pix.height());
+    else
+        setOffset(0, 0);
+}
+
+void Player::faceSprite()
+{
+    setSprite(leftface ? "./dataset/images/doodleUL.png" : "./dataset/images/doodleUR.png");
+}
+
 void Player::keyPressEvent(QKeyEvent *event)
 {
     // move the player left and right
-    if (event->key() == Qt::Key_Left)
+    if (event->key() == Qt::Key_Left || event->key() == Qt::Key_Right)
     {
-        leftface = true;
-        setPixmap(QPixmap("./dataset/images/doodleUL.png"));
-        if (pos().x() <= 0)
-        {
-            setX(540);
-        }
-        dx = -4;
-        timer = new QTimer(this);
-        connect(timer, SIGNAL(timeout()), this, SLOT(moveX()));
-        timer->start(5);
+        leftface = (event->key() == Qt::Key_Left);
+        dx = leftface ? -4 : 4;
+        if (!isFlying())
+            faceSprite();
+        if (!timerx->isActive())
+            timerx->start(5);
     }
-    else if (event->key() == Qt::Key_Right)
+
+    // shoot with the spacebar, aiming at the mouse cursor
+    else if (event->key() == Qt::Key_Space && !event->isAutoRepeat())
     {
-        leftface = false;
-        setPixmap(QPixmap("./dataset/images/doodleUR.png"));
-        if (pos().x() >= 540)
+        QPointF muzzle = pos() + QPointF(40, 0);
+        QPointF target = muzzle - QPointF(0, 100);   // straight up if there is no view
+        if (!scene()->views().isEmpty())
         {
-            setX(0);
+            // global cursor position -> view -> scene coordinates
+            QGraphicsView *view = scene()->views().first();
+            target = view->mapToScene(view->viewport()->mapFromGlobal(QCursor::pos()));
         }
-        dx = 4;
-        timer = new QTimer(this);
-        connect(timer, SIGNAL(timeout()), this, SLOT(moveX()));
-        timer->start(5);
-    }
-    
-    // shoot with the spacebar
-    else if (event->key() == Qt::Key_Space)
-    {
-        // Get the current mouse position
-        QPoint mousePos = QCursor::pos();
-        QPointF playerPos = this->pos();
-        Bullet *bullet = new Bullet(nullptr, playerPos.x(), playerPos.y(),mousePos.x()-1172, mousePos.y()-375);
+        Bullet *bullet = new Bullet(nullptr, muzzle.x(), muzzle.y(), target.x(), target.y());
         scene()->addItem(bullet);
-        setZValue(1);
-        setPixmap(QPixmap("./dataset/images/doodleS.png"));
+        if (!isFlying())
+        {
+            setSprite("./dataset/images/doodleS.png");
+            QTimer::singleShot(250, this, [this] { if (!isFlying()) faceSprite(); });
+        }
         shoot->play();
     }
 }
 
 void Player::keyReleaseEvent(QKeyEvent *event)
 {
-    if (event->key() == Qt::Key_Left)
+    if (event->isAutoRepeat())
+        return;
+    if ((event->key() == Qt::Key_Left && dx < 0) || (event->key() == Qt::Key_Right && dx > 0))
     {
         dx = 0;
-        disconnect(timer, SIGNAL(timeout()), this, SLOT(moveX()));
+        timerx->stop();
     }
-    else if (event->key() == Qt::Key_Right)
+}
+
+void Player::handleCollisions()
+{
+    const QList<QGraphicsItem*> hits = collidingItems();
+
+    // platforms only count while falling, so the doodle passes through them on the way up
+    if (vel < 0)
     {
-        dx = 0;
-        disconnect(timer, SIGNAL(timeout()), this, SLOT(moveX()));
+        for (QGraphicsItem *g : hits)
+        {
+            Platform * platform = dynamic_cast<Platform *>(g);
+            if (platform && platform->collide(this))
+            {
+                yCounter = 0;
+                jump->play();
+                break;
+            }
+        }
+    }
+
+    for (QGraphicsItem *g : hits)
+    {
+        Monster * monster = dynamic_cast<Monster *>(g);
+        if (monster)
+        {
+            monster->collide(this);
+            if (game->gameOver)
+                return;
+        }
+    }
+
+    for (QGraphicsItem *g : hits)
+    {
+        Item * item = dynamic_cast<Item *>(g);
+        if (item)
+            item->collide(this);
+    }
+}
+
+void Player::startBoost(int itemType)
+{
+    touchSpring = (itemType == 1);
+    touchTrampoline = (itemType == 2);
+    touchHat = (itemType == 3);
+    touchJet = (itemType == 4);
+    yCounter = 0;
+    if (!middle)
+        vel = 5;   // rising again; move() sets the boosted speed
+    if (!isFlying())
+        faceSprite();
+}
+
+void Player::endBoost()
+{
+    bool wasFlying = isFlying();
+    touchSpring = touchTrampoline = touchHat = touchJet = false;
+    if (wasFlying)
+        faceSprite();
+}
+
+void Player::animateFlight()
+{
+    if (touchHat)
+    {
+        if (yCounter % 2 == 0 && ++hcount > 4)
+            hcount = 1;
+        setSprite(QString("./dataset/images/doodleH/doodleH%1.png").arg(hcount));
+    }
+    else if (touchJet)
+    {
+        if (yCounter % 2 == 0 && ++jcount > 10)
+            jcount = 1;
+        setSprite(QString("./dataset/images/doodleJ/doodleJ%1.png").arg(jcount), false);
     }
 }
 
 void Player::move()
 {
-    if (vel <= -5)
-    {
-        QList<QGraphicsItem*> colliding_items1 = collidingItems();
-        for(int i = 0, n = colliding_items1.size();i<n; ++i)
-        {
-            Platform * platform = dynamic_cast<Platform *>(colliding_items1[i]);
-            if(platform)
-            {
-                if(leftface)
-                    setPixmap(QPixmap("./dataset/images/doodleL.png"));
-                else
-                    setPixmap(QPixmap("./dataset/images/doodleR.png"));
-                platform->collide(this, platform->getType());
-                yCounter = 0; 
-                jump->play(); 
-            }
-        }
-    }
-    
-    QList<QGraphicsItem*> colliding_items2 = collidingItems();
-    for(int i = 0, n = colliding_items2.size();i<n; ++i)
-    {
-        Monster * monster = dynamic_cast<Monster *>(colliding_items2[i]);
-        if(monster)
-        {
-            monster->collide(this);
-            yCounter = 0;
-        }
-    }
-    QList<QGraphicsItem*> colliding_items3 = collidingItems();
-    for(int i = 0, n = colliding_items3.size();i<n; ++i)
-    {
-        Item * item = dynamic_cast<Item *>(colliding_items3[i]);
-        if(item)
-        {
-            item->collide(this, item->getType());
-        }
-    }
+    if (game->gameOver)
+        return;
+    handleCollisions();
+    if (game->gameOver)
+        return;
+
+    // Rising is constant-speed for a fixed number of ticks, so distance = ticks x speed.
+    int speed = 5, ticks = 64;                                   //  320 px
+    if (touchSpring)          { speed = 10; ticks = 96; }        //  960 px
+    else if (touchTrampoline) { speed = 20; ticks = 96; }        // 1920 px
+    else if (touchHat)        { speed = 40; ticks = 96; }        // 3840 px
+    else if (touchJet)        { speed = 80; ticks = 96; }        // 7680 px
 
     yCounter++;
-    if (touchSpring)
+    if (vel > 0 || middle)   // still on the way up
     {
-        vel = 10;
         if (middle)
         {
+            // camera locked at half screen: the world moves instead of the doodle
             vel = 0;
-            deltaY = -10;
-            game -> movePlatforms(deltaY);
+            game -> movePlatforms(-speed);
         }
-        if (yCounter == 96)
+        else
         {
+            vel = speed;
+        }
+        if (yCounter >= ticks)
+        {
+            // top of the jump: fall at a constant 5 px per tick
             vel = -5;
-            yCounter = 0;
             middle = false;
-            touchSpring =false;
+            endBoost();
         }
     }
-    else if (touchTrampoline)
-    {
-        vel = 10;
-        if (middle)
-        {
-            vel = 0;
-            deltaY = -20;
-            game -> movePlatforms(deltaY);
-        }
-        if (yCounter == 96)
-        {
-            vel = -5;
-            yCounter = 0;
-            middle = false;
-            touchTrampoline =false;
-        }
-    }
-    else if (touchHat)
-    {
-        if (middle)
-        {
-            deltaY = -40;
-            game -> movePlatforms(deltaY);
-        }
-        if (yCounter == 96)
-        {
-            //3840
-            vel = -5;
-            yCounter = 0;
-            middle = false;
-            touchHat =false;
-            if(leftface)
-                setPixmap(QPixmap("./dataset/images/doodleUL.png"));
-            else
-                setPixmap(QPixmap("./dataset/images/doodleUR.png"));
-        }
-        if (hcount >= 4)
-        {
-            hcount = 1;
-        }
-        QString hatImagePath = QString("./dataset/images/doodleH/doodleH%1.png").arg(hcount);
-        QPixmap hatPixmap(hatImagePath);
-        setPixmap(hatPixmap);
-        hcount++;
-    }
-    else if (touchJet)
-    {
-        if (middle)
-        {
-            deltaY = -80;
-            game -> movePlatforms(deltaY);
-        }
-        if (yCounter == 96)
-        {
-            //7680
-            vel = -5;
-            yCounter = 0;
-            middle = false;
-            touchJet =false;
-            if(leftface)
-                setPixmap(QPixmap("./dataset/images/doodleUL.png"));
-            else
-                setPixmap(QPixmap("./dataset/images/doodleUR.png"));
-        }
-        if (jcount >= 10)
-        {
-            jcount = 1;
-        }  
-        QString jetImagePath = QString("./dataset/images/doodleJ/doodleJ%1.png").arg(jcount);
-        QPixmap jetPixmap(jetImagePath);
-        setPixmap(jetPixmap);
-        jcount++;
-    }
-    else
-    {
-        if (middle)
-        {
-            deltaY = -5;
-            game -> movePlatforms(deltaY);
-        }
-        if (yCounter == 64)
-        {
-            vel = -5;
-            yCounter = 0;
-            middle = false;
-        }
-    }
+    animateFlight();
     setY(pos().y() - vel);
-    //end gmae
+
+    //end game
     if (pos().y() > 960)
-    {
-        for(int i = 0; i < 1; i++)
-        {
-            game -> endGame(game -> score ->getfinalscore());
-        }
-    }
+        game -> requestGameOver();
 }
 
 void Player::setVel()
-{   
+{
     vel = 5;
-    if(leftface)
-        setPixmap(QPixmap("./dataset/images/doodleUL.png"));
-    else
-        setPixmap(QPixmap("./dataset/images/doodleUR.png"));
+    if (!isFlying())
+        faceSprite();
 }
 
 double Player::getVel()
@@ -255,26 +226,33 @@ double Player::getVel()
 
 void Player::Camera()
 {
-    if (pos().y() < 480)
+    // past the half-screen line on the way up: lock the doodle there
+    if (pos().y() < 480 && vel > 0)
     {
         middle = true;
         vel = 0;
     }
 }
 
-void Player::highest(bool first)
+void Player::highest()
 {
-    if(first){
-        height = 480; 
+    if (game->gameOver)
+        return;
+    // score = highest point reached: distance scrolled + height above the start
+    int height = int(game->climbed + (860 - pos().y()));
+    if (height > best)
+    {
+        best = height;
+        game -> score -> increase(best);
     }
-    else{
-        height += 5;
-    }
-    game -> score -> increase(height);
 }
 
 void Player::moveX()
 {
     setX(pos().x()+dx);
-    timer->start(5);
+    // wraparound: leaving one side brings the doodle back on the other
+    if (pos().x() + 40 < 0)
+        setX(pos().x() + 540);
+    else if (pos().x() + 40 > 540)
+        setX(pos().x() - 540);
 }

@@ -32,16 +32,14 @@ public:
     void keyPressEvent(QKeyEvent * event);
     void keyReleaseEvent(QKeyEvent *event);
     double vel;
-    double jumpheight;
     double getVel();
     void setVel();
-    Platform * platform;
     void Camera();
+    void startBoost(int itemType);
+    bool isFlying() const { return touchHat || touchJet; }
+    double feet() const { return pos().y() + 80; }   // bottom of the 80 x 80 body
     bool leftface = true;
-    int height = 0;
-    Item * item;
     bool middle = false;
-    double deltaY = 0;
     int yCounter = 0;
     bool touchSpring = false;
     bool touchTrampoline = false;
@@ -50,14 +48,19 @@ public:
     int hcount = 1;
     int jcount = 1;
     int dx = 0;
-    QTimer* timer, timerx;
-    int before = 960;
-    bool first = true;
+    int best = 0;             // highest point reached so far = the score
+    QTimer *timerx;
     QMediaPlayer *shoot, *jump;
+private:
+    void setSprite(const QString &path, bool alignBottom = true);
+    void faceSprite();
+    void handleCollisions();
+    void endBoost();
+    void animateFlight();
 public slots:
     void moveX();
     void move();
-    void highest(bool);
+    void highest();
 };
 
 #endif // PLAYER_H
